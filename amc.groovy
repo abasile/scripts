@@ -40,8 +40,15 @@ gmail              = tryQuietly{ gmail.split(':', 2) as List }
 mail               = tryQuietly{ mail.split(':', 5) as List }
 pushover           = tryQuietly{ pushover.split(':', 2) as List }
 pushbullet         = tryQuietly{ pushbullet.toString() }
+pushbulletDevices  = tryQuietly{ pushbulletDevices.toString() }
 storeReport        = tryQuietly{ storeReport.toBoolean() }
 reportError        = tryQuietly{ reportError.toBoolean() }
+
+t_host = "localhost"
+t_port = tryQuietly{ ut_port } ?: 8000
+t_usr = tryQuietly{ ut_usr } ?: "admin"
+t_pwd = tryQuietly{ ut_pwd } ?: "passwd"
+t_hash = tryQuietly{ ut_hash } ?: null
 
 // user-defined filters
 label       = any{ ut_label }{ null }
@@ -271,7 +278,7 @@ def acceptFile(f) {
 	// ignore subtitle files without matching video file in the same or parent folder
 	if (f.isSubtitle() && ![f, f.dir].findResults{ it.dir }.any{ it.listFiles{ it.isVideo() && f.isDerived(it) }}) {
 		log.fine "Ignore orphaned subtitles: $f"
-		return false	
+		return false
 	}
 
 	// process only media files (accept audio files only if music mode is enabled)
@@ -532,6 +539,27 @@ if (exec) {
 	}
 }
 
+// find folder with missing subtitle
+if(missingSubtitleList){
+	def files = getRenameLog().clone();
+	def addMissingSub = {log , file ->
+		// find files without subtitle
+		def foundSubtitles = log.findAll{key, value -> key.name.endsWith(".srt")}
+		def withSub = (log - foundSubtitles).findAll { key, value ->
+			foundSubtitles.findAll { subkey, subvalue -> subvalue.name.startsWith(value.nameWithoutExtension) }
+		}
+		def withoutSub = log - foundSubtitles - withSub
+		def builder  = new groovy.json.JsonBuilder()
+		def list = new groovy.json.JsonSlurper().parseText((new File(file).text)?:"[]")
+		withoutSub.each{ key , value ->
+			list.add([dir : value.dir.path , file : value.name , original : key.name , date : System.currentTimeMillis()])
+		}
+		builder.call(list)
+
+		new File(file).write(builder.toPrettyString())
+	}
+	addMissingSub(files,missingSubtitleList)
+}
 
 // ---------- REPORTING ---------- //
 
@@ -543,7 +571,7 @@ if (getRenameLog().size() > 0) {
 		return "FileBot finished processing $count files"
 	}.memoize()
 
-	def getNotificationMessage = { prefix = '• ', postfix = '\n' -> 
+	def getNotificationMessage = { prefix = '• ', postfix = '\n' ->
 		return ut.title ?: (input.findAll{ !it.isSubtitle() } ?: input).collect{ relativeInputPath(it) as File }.root.nameWithoutExtension.unique().collect{ prefix + it }.join(postfix).trim()
 	}.memoize()
 
@@ -654,9 +682,9 @@ if (getRenameLog().size() > 0) {
 
 	// send pushbullet report
 	if (pushbullet) {
-		log.fine 'Sending PushBullet report'
+		log.fine "Sending PushBullet report to devices : $pushbulletDevices"
 		tryLogCatch {
-			PushBullet(pushbullet).sendFile(getNotificationTitle() + '.html', getReportMessage(), 'text/html', getNotificationMessage(), any{ mailto }{ null })
+			PushBullet(pushbullet,pushbulletDevices?pushbulletDevices:null).sendHtml(getReportTitle(), getReportMessage(), getNotificationMessage())
 		}
 	}
 

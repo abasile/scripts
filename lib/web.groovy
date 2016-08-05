@@ -1,3 +1,4 @@
+
 /****************************************************************************
  * Pushover
  * 				https://pushover.net
@@ -56,8 +57,8 @@ class PushoverClient {
  * PushBullet
  * 				https://www.pushbullet.com
  ****************************************************************************/
-def PushBullet(apikey) {
-	new PushBulletClient(apikey:apikey)
+def PushBullet(apikey, devices = null) {
+    new PushBulletClient2(apikey:apikey, devices:devices)
 }
 
 class PushBulletClient {
@@ -101,4 +102,133 @@ class PushBulletClient {
 		def pushFileData = [type: 'file', file_url: response.file_url, file_name: file_name, file_type: file_type, body: body, email: email]
 		endpoint_pushes.post(pushFileData, requestProperties)
 	}
+}
+
+class PushBulletClient2 {
+    def apikey
+    def devices
+
+    def url_devices = new URL('https://api.pushbullet.com/v2/devices')
+    def url_pushes = new URL('https://api.pushbullet.com/v2/pushes')
+    def url_upload = new URL('https://api.pushbullet.com/v2/upload-request')
+
+    def sendHtml = { title, FileContent, textMessage = "" ->
+        def auth = "${apikey}".getBytes().encodeBase64().toString()
+        def header = [requestProperties: [Authorization: "Basic ${auth}" as String]]
+        def response = new groovy.json.JsonSlurper().parse(url_devices, header)
+        def targets = devices? response.devices.findAll{it.nickname =~ devices || it.iden =~ devices}.findResults{ it.iden } :['']
+
+        targets.each{ device_iden ->
+            def decoder = java.nio.charset.Charset.forName("UTF-8").newDecoder()
+            def uploadRequestResponse = new groovy.json.JsonSlurper().parseText(
+                    decoder.decode(url_upload.post([file_name:"${title}.html",file_type:"text/html"],header.requestProperties)).toString()
+            )
+            def contentType = 'multipart/form-data; boundary=----------------------------a1134e1059ac'
+            def multiPartFormData = """------------------------------a1134e1059ac
+"""
+            uploadRequestResponse.data.each{name , value ->
+                multiPartFormData += """Content-Disposition: form-data; name="${name}"
+
+${value}
+------------------------------a1134e1059ac
+"""
+            }
+            multiPartFormData += """Content-Disposition: form-data; name="file"
+
+${FileContent}
+------------------------------a1134e1059ac--
+"""
+
+            println "reponse upload request ${uploadRequestResponse}"
+            new URL(uploadRequestResponse.upload_url).post(multiPartFormData.replaceAll("\\r?\\n","\r\n").getBytes("UTF-8"), contentType, [:])
+            url_pushes.post([type:"link",device_iden:device_iden,title:title,url:uploadRequestResponse.file_url,body:textMessage],header.requestProperties)
+        }
+    }
+}
+
+def Utorrent(host, port, id, pwd, log){
+    new Utorrent(host: host, port: port, id: id, password: pwd, lg: log)
+}
+
+// uTorrent class
+public class Utorrent {
+    def host = "localhost"
+    def port = 80
+    def id, password
+    def token, cookie, lg
+
+    /**
+     * Fetch the authentication token from uTorrent and store it in the object instance
+     */
+    protected void fetchToken() {
+        lg.fine("Fetching uTorrent token...")
+        String tok = get("/gui/token.html", [:], true)
+        def m = tok =~ /<div .*>(.+)<\/div>/
+        token = m[0][1]
+    }
+
+    protected void fetchCookie(URLConnection conn) {
+        def headerName = null
+        for (int i=1; (headerName = conn.getHeaderFieldKey(i)) != null; i++) {
+            if (headerName.equalsIgnoreCase("Set-Cookie")) {
+                String cook = conn.getHeaderField(i)
+                cookie = cook.substring(0, cook.indexOf(";"))
+            }
+        }
+    }
+
+    /**
+     * Perform a command against the web UI
+     * @param cmd The command to perform; the resource portion of the URL (i.e. /gui/)
+     * @param args The map of key/val query args to be appended to the URL; do NOT url-encode the values ahead of time
+     * @param isTok Prevents infinite loops; set to true when trying to grab the auth token from uTorrent server
+     * @return The result of the command as received from uTorrent server
+     */
+    protected String get(def cmd, def args, def isTok = false) {
+        if(token == null && !isTok)
+            fetchToken()
+        def url = "http://$host:$port$cmd?" + (token != null ? "token=" + java.net.URLEncoder.encode(token, "UTF-8") : "")
+        args.each {k, v ->
+            url += "&" + java.net.URLEncoder.encode(k) + "=" + java.net.URLEncoder.encode(v)
+        }
+        def conn = new URL(url).openConnection()
+        if(id != "" || password != "")
+            conn.setRequestProperty("Authorization", "Basic " + "$id:$password".getBytes().encodeBase64().toString())
+        if(!isTok && cookie != "")
+            conn.setRequestProperty("Cookie", cookie.toString())
+        else
+            fetchCookie(conn)
+        def out = new ByteArrayOutputStream()
+        out << conn.getInputStream()
+        return out.toString()
+    }
+
+    protected void stop(String hash) {
+        get("/gui/", ["action": "stop", "hash": hash])
+    }
+
+    protected void start(String hash) {
+        // first rechech
+        get("/gui/", ["action": "recheck", "hash": hash])
+        // than start
+        get("/gui/", ["action": "start", "hash": hash])
+    }
+
+
+    protected void removedata(String hash) {
+        // remove torrent and data
+        get("/gui/", ["action": "removedata", "hash": hash])
+    }
+
+
+
+    /**
+     * Add a new torrent URL to be downloaded
+     * @param url The url of the torrent file to be downloaded by uTorrent
+     */
+    public void addUrl(def url) {
+        def resource = url.toString()
+        get("/gui/", ["action":"add-url", "s":resource])
+    }
+
 }
