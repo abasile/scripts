@@ -116,7 +116,7 @@ class PushBulletClient2 {
         def auth = "${apikey}".getBytes().encodeBase64().toString()
         def header = [requestProperties: [Authorization: "Basic ${auth}" as String]]
         def response = new groovy.json.JsonSlurper().parse(url_devices, header)
-        def targets = devices? response.devices.findAll{it.nickname =~ devices || it.iden =~ devices}.findResults{ it.iden } :['']
+        def targets = devices? response.devices.findAll{it.nickname =~ devices || it.iden =~ devices}.sort{ it.modified }.findResults{ it.iden }.take(1) :['']
 
         targets.each{ device_iden ->
             def decoder = java.nio.charset.Charset.forName("UTF-8").newDecoder()

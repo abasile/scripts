@@ -112,15 +112,21 @@ def findSubTest = { missingSubFile , notFoundMissingSubFile->
     new File(notFoundMissingSubFile).write(builder.toPrettyString())
 }
 
+def join = {
+    def test = "test"
+    print test
+
+}
 
 def utorrentTest = {
     def ut = Utorrent("localhost", 8000, "tooon", "d13,r15.", log)
 
     ut.removedata("F5D9B9603602C6CA0A05C0C67AB2CA0EB6886FCD")
 }
-pushbulletTest()
+//pushbulletTest()
 //addMissingSubTest(getSubSet(),"D:\\Desktop\\withoutSubList.json")
 //findSubTest("E:\\downloadchaine\\withoutSubList.json","E:\\downloadchaine\\subNotFoundList.json")
 //utorrentTest()
 
+join()
 

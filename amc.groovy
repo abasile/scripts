@@ -539,28 +539,6 @@ if (exec) {
 	}
 }
 
-// find folder with missing subtitle
-if(missingSubtitleList){
-	def files = getRenameLog().clone();
-	def addMissingSub = {log , file ->
-		// find files without subtitle
-		def foundSubtitles = log.findAll{key, value -> key.name.endsWith(".srt")}
-		def withSub = (log - foundSubtitles).findAll { key, value ->
-			foundSubtitles.findAll { subkey, subvalue -> subvalue.name.startsWith(value.nameWithoutExtension) }
-		}
-		def withoutSub = log - foundSubtitles - withSub
-		def builder  = new groovy.json.JsonBuilder()
-		def list = new groovy.json.JsonSlurper().parseText((new File(file).text)?:"[]")
-		withoutSub.each{ key , value ->
-			list.add([dir : value.dir.path , file : value.name , original : key.name , date : System.currentTimeMillis()])
-		}
-		builder.call(list)
-
-		new File(file).write(builder.toPrettyString())
-	}
-	addMissingSub(files,missingSubtitleList)
-}
-
 // ---------- REPORTING ---------- //
 
 
