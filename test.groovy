@@ -1,7 +1,11 @@
 /**
  * Created by a on 01/09/2014.
  */
-
+println args
+println binding.variables
+println _args.args
+_def.each{ n, v -> log.finest('Parameter: ' + [n, n =~ /plex|kodi|pushover|pushbullet|mail|myepisodes/ ? '*****' : v].join(' = ')) }
+println launch
 include('lib/web')
 
 def pushbulletTest = {
